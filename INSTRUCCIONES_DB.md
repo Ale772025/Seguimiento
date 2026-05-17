@@ -5,11 +5,8 @@ Sigue estos pasos para habilitar la base de datos de tu aplicación:
 ### 1. Preparar la Planilla
 1. Crea una nueva **Google Sheet**.
 2. Cambia el nombre de la primera pestaña a `Estudiantes`.
-3. Cambia el nombre de la segunda pestaña a `Periodos`.
-4. En `Estudiantes`, agrega estos encabezados en la primera fila:
-   `ID | nombre | materia | curso | periodoId | estado`
-5. En `Periodos`, agrega estos encabezados en la primera fila:
-   `ID | nombre | estado`
+3. En `Estudiantes`, agrega estos encabezados en la primera fila (exactamente como están aquí, en minúsculas excepto ID):
+   `ID | nombre | cursoOrigen | materia | curso | periodo | estado`
 
 ### 2. Crear el Script
 1. Dentro de tu Google Sheet, ve a **Extensiones > Apps Script**.
@@ -20,12 +17,10 @@ const SPREADSHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
 
 function doGet(e) {
   const sheetEstudiantes = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("Estudiantes");
-  const sheetPeriodos = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("Periodos");
   
   const estudiantes = getRows(sheetEstudiantes);
-  const periodos = getRows(sheetPeriodos);
   
-  return ContentService.createTextOutput(JSON.stringify({ estudiantes, periodos }))
+  return ContentService.createTextOutput(JSON.stringify({ estudiantes }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -35,6 +30,14 @@ function doPost(e) {
   
   if (data.action === "add") {
     sheet.appendRow(data.row);
+  } else if (data.action === "update") {
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0].toString() === data.id.toString()) {
+        sheet.getRange(i + 1, 1, 1, data.row.length).setValues([data.row]);
+        break;
+      }
+    }
   }
   
   return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
@@ -43,6 +46,7 @@ function doPost(e) {
 
 function getRows(sheet) {
   const data = sheet.getDataRange().getValues();
+  if (data.length === 0) return [];
   const headers = data.shift();
   return data.map(row => {
     const obj = {};

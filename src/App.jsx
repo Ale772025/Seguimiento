@@ -28,19 +28,21 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 // Configuración de Google Sheets (a rellenar por el usuario)
-const GAS_APP_URL = 'https://script.google.com/macros/s/AKfycbxRyHYGEJJnuTlq56WZNVTpadZ8z4z86dmwo6umk-f1kP-rtuQuu0NDeGt0v0CrcFZF/exec'; 
+const GAS_APP_URL = 'https://script.google.com/macros/s/AKfycbwdY5v4YVvFq4s_gu2EVk0_4mnQcGeF_RTIHNPlb5j4dPc5QlpcScSeGwou0NUIq2kt/exec'; 
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [students, setStudents] = useState([]);
-  const [periods, setPeriods] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [newStudent, setNewStudent] = useState({
     nombre: '',
+    cursoOrigen: '',
     materia: '',
     curso: '',
-    periodoId: '',
+    periodo: '',
     estado: 'Pendiente'
   });
 
@@ -49,16 +51,12 @@ function App() {
     const fetchData = async () => {
       if (!GAS_APP_URL) {
         // Cargar datos de ejemplo si no hay URL configurada
-        setPeriods([
-          { id: '1', nombre: 'Febrero 2026', estado: 'Activo' },
-          { id: '2', nombre: 'Diciembre 2025', estado: 'Cerrado' },
-        ]);
         setStudents([
-          { id: '1', nombre: 'Juan Pérez', materia: 'Matemática', curso: '4to A', periodoId: '1', estado: 'Aprobado' },
-          { id: '2', nombre: 'Ana García', materia: 'Física', curso: '5to B', periodoId: '1', estado: 'Pendiente' },
-          { id: '3', nombre: 'Luis Sosa', materia: 'Historia', curso: '3er C', periodoId: '2', estado: 'Desaprobado' },
-          { id: '4', nombre: 'Marta López', materia: 'Inglés', curso: '4to A', periodoId: '1', estado: 'Aprobado' },
-          { id: '5', nombre: 'Pedro Ruiz', materia: 'Matemática', curso: '5to B', periodoId: '2', estado: 'Aprobado' },
+          { id: '1', nombre: 'Juan Pérez', cursoOrigen: '3ro A', materia: 'Matemática', curso: '4to A', periodo: 'Febrero 2026', estado: 'Aprobado' },
+          { id: '2', nombre: 'Ana García', cursoOrigen: '4to B', materia: 'Física', curso: '5to B', periodo: 'Febrero 2026', estado: 'Pendiente' },
+          { id: '3', nombre: 'Luis Sosa', cursoOrigen: '2do C', materia: 'Historia', curso: '3er C', periodo: 'Diciembre 2025', estado: 'Desaprobado' },
+          { id: '4', nombre: 'Marta López', cursoOrigen: '3ro A', materia: 'Inglés', curso: '4to A', periodo: 'Febrero 2026', estado: 'Aprobado' },
+          { id: '5', nombre: 'Pedro Ruiz', cursoOrigen: '4to B', materia: 'Matemática', curso: '5to B', periodo: 'Diciembre 2025', estado: 'Aprobado' },
         ]);
         setLoading(false);
         return;
@@ -68,12 +66,10 @@ function App() {
         const response = await fetch(GAS_APP_URL);
         const data = await response.json();
         setStudents(data.estudiantes || []);
-        setPeriods(data.periodos || []);
       } catch (error) {
         console.error("Error cargando datos:", error);
         // Si falla la carga, inicializamos con arrays vacíos para evitar errores en el render
         setStudents([]);
-        setPeriods([]);
       } finally {
         setLoading(false);
       }
@@ -94,16 +90,17 @@ function App() {
 
   // Datos para gráfico de barras por periodo
   const chartData = useMemo(() => {
-    return periods.map(p => {
-      const pStudents = students.filter(s => s.periodoId === p.id);
+    const uniquePeriods = [...new Set(students.map(s => s.periodo))];
+    return uniquePeriods.map(p => {
+      const pStudents = students.filter(s => s.periodo === p);
       const approved = pStudents.filter(s => s.estado === 'Aprobado').length;
       return {
-        name: p.nombre,
+        name: p || 'Sin definir',
         aprobados: approved,
         total: pStudents.length
       };
     });
-  }, [periods, students]);
+  }, [students]);
 
   const handleAddStudent = async (e) => {
     e.preventDefault();
@@ -118,7 +115,7 @@ function App() {
           body: JSON.stringify({
             sheet: 'Estudiantes',
             action: 'add',
-            row: [student.id, student.nombre, student.materia, student.curso, student.periodoId, student.estado]
+            row: [student.id, student.nombre, student.cursoOrigen, student.materia, student.curso, student.periodo, student.estado]
           })
         });
       } catch (error) {
@@ -128,7 +125,34 @@ function App() {
 
     setStudents([...students, student]);
     setIsModalOpen(false);
-    setNewStudent({ nombre: '', materia: '', curso: '', periodoId: '', estado: 'Pendiente' });
+    setNewStudent({ nombre: '', cursoOrigen: '', materia: '', curso: '', periodo: '', estado: 'Pendiente' });
+  };
+
+  const handleUpdateStatus = async (id, newStatus) => {
+    const studentToUpdate = students.find(s => s.id === id);
+    if (!studentToUpdate) return;
+
+    const updatedStudent = { ...studentToUpdate, estado: newStatus };
+    
+    if (GAS_APP_URL) {
+      try {
+        await fetch(GAS_APP_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sheet: 'Estudiantes',
+            action: 'update',
+            id: id,
+            row: [updatedStudent.id, updatedStudent.nombre, updatedStudent.cursoOrigen, updatedStudent.materia, updatedStudent.curso, updatedStudent.periodo, updatedStudent.estado]
+          })
+        });
+      } catch (error) {
+        console.error("Error actualizando:", error);
+      }
+    }
+
+    setStudents(students.map(s => s.id === id ? updatedStudent : s));
   };
 
   const generatePDF = (filterType, filterValue) => {
@@ -146,15 +170,16 @@ function App() {
 
     const tableData = filteredData.map(s => [
       s.nombre, 
+      s.cursoOrigen || '-',
       s.materia, 
       s.curso, 
-      periods.find(p => p.id === s.periodoId)?.nombre || 'N/A', 
+      s.periodo || 'N/A', 
       s.estado
     ]);
 
     autoTable(doc, {
       startY: 40,
-      head: [['Nombre', 'Materia', 'Curso', 'Periodo', 'Estado']],
+      head: [['Nombre', 'Curso de Origen', 'Materia', 'Intensifica en', 'Periodo', 'Estado']],
       body: tableData,
     });
 
@@ -179,9 +204,6 @@ function App() {
           </a>
           <a className={`nav-item ${activeTab === 'students' ? 'active' : ''}`} onClick={() => setActiveTab('students')}>
             <Users size={20} /> Estudiantes
-          </a>
-          <a className={`nav-item ${activeTab === 'periods' ? 'active' : ''}`} onClick={() => setActiveTab('periods')}>
-            <Calendar size={20} /> Periodos
           </a>
           <a className={`nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>
             <FileText size={20} /> Informes
@@ -258,8 +280,9 @@ function App() {
               <thead>
                 <tr>
                   <th>Nombre</th>
+                  <th>Curso de Origen</th>
                   <th>Materia</th>
-                  <th>Curso</th>
+                  <th>Intensifica en</th>
                   <th>Periodo</th>
                   <th>Estado</th>
                   <th>Acciones</th>
@@ -269,16 +292,26 @@ function App() {
                 {students.map(s => (
                   <tr key={s.id}>
                     <td style={{ fontWeight: 500 }}>{s.nombre}</td>
+                    <td>{s.cursoOrigen || '-'}</td>
                     <td>{s.materia}</td>
                     <td>{s.curso}</td>
-                    <td>{periods.find(p => p.id === s.periodoId)?.nombre}</td>
+                    <td>{s.periodo}</td>
                     <td>
                       <span className={`status-badge status-${s.estado.toLowerCase()}`}>
                         {s.estado}
                       </span>
                     </td>
                     <td>
-                      <button className="btn btn-outline" style={{ padding: '4px 8px' }}>Ver</button>
+                      <button 
+                        className="btn btn-outline" 
+                        style={{ padding: '4px 8px' }}
+                        onClick={() => {
+                          setSelectedStudent(s);
+                          setIsViewModalOpen(true);
+                        }}
+                      >
+                        Ver
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -287,32 +320,10 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'periods' && (
-          <div className="stats-grid">
-            {periods.map(p => (
-              <div key={p.id} className="stat-card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3>Periodo</h3>
-                  <span className={`status-badge ${p.estado === 'Activo' ? 'status-aprobado' : 'status-desaprobado'}`}>
-                    {p.estado}
-                  </span>
-                </div>
-                <div className="value">{p.nombre}</div>
-                <p style={{ fontSize: '0.875rem', marginTop: '0.5rem', color: 'var(--text-muted)' }}>
-                  {students.filter(s => s.periodoId === p.id).length} alumnos registrados
-                </p>
-              </div>
-            ))}
-            <div className="stat-card" style={{ border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-               <Plus size={32} color="var(--border)" />
-            </div>
-          </div>
-        )}
-
         {activeTab === 'reports' && (
           <div className="stats-grid">
             <div className="stat-card">
-              <h3>Informe por Curso</h3>
+              <h3>Informe por Intensifica en</h3>
               <p>Genera un resumen detallado de una división específica.</p>
               <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
                 <select className="form-control" id="courseSelect">
@@ -339,6 +350,87 @@ function App() {
         )}
       </main>
 
+      {/* Modal Ver/Editar Alumno */}
+      {isViewModalOpen && selectedStudent && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2>Detalles de Intensificación</h2>
+              <button className="btn btn-outline" style={{ padding: '4px' }} onClick={() => setIsViewModalOpen(false)}>
+                <XCircle size={24} />
+              </button>
+            </div>
+            
+            <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: 'var(--background)', borderRadius: '8px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--primary)' }}>{selectedStudent.nombre}</h3>
+              <p style={{ margin: '0.5rem 0 0 0', color: 'var(--text-muted)' }}>
+                <strong>Materia:</strong> {selectedStudent.materia} <br/>
+                <strong>Curso de Origen:</strong> {selectedStudent.cursoOrigen || '-'} <br/>
+                <strong>Intensifica en:</strong> {selectedStudent.curso}
+              </p>
+            </div>
+
+            <h3>Historial de Intentos</h3>
+            <div style={{ marginTop: '1rem', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+              <table style={{ margin: 0 }}>
+                <thead>
+                  <tr>
+                    <th>Periodo</th>
+                    <th>Estado</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {students.filter(s => s.nombre === selectedStudent.nombre && s.materia === selectedStudent.materia).map(s => (
+                    <tr key={s.id}>
+                      <td>{s.periodo}</td>
+                      <td>
+                        <span className={`status-badge status-${s.estado.toLowerCase()}`}>
+                          {s.estado}
+                        </span>
+                      </td>
+                      <td>
+                        <select 
+                          className="form-control"
+                          style={{ padding: '4px', fontSize: '0.875rem' }}
+                          value={s.estado}
+                          onChange={(e) => handleUpdateStatus(s.id, e.target.value)}
+                        >
+                          <option value="Pendiente">Pendiente</option>
+                          <option value="Aprobado">Aprobado</option>
+                          <option value="Desaprobado">Desaprobado</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ marginTop: '2rem' }}>
+              <button 
+                className="btn btn-primary" 
+                style={{ width: '100%' }}
+                onClick={() => {
+                  setNewStudent({
+                    nombre: selectedStudent.nombre,
+                    cursoOrigen: selectedStudent.cursoOrigen,
+                    materia: selectedStudent.materia,
+                    curso: selectedStudent.curso,
+                    periodo: '',
+                    estado: 'Pendiente'
+                  });
+                  setIsViewModalOpen(false);
+                  setIsModalOpen(true);
+                }}
+              >
+                <Plus size={20} /> Añadir Nuevo Intento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Agregar Alumno */}
       {isModalOpen && (
         <div className="modal-overlay">
@@ -364,7 +456,16 @@ function App() {
                 />
               </div>
               <div className="form-group">
-                <label>Curso / División</label>
+                <label>Curso de Origen</label>
+                <input 
+                  className="form-control" 
+                  value={newStudent.cursoOrigen || ''} 
+                  onChange={e => setNewStudent({...newStudent, cursoOrigen: e.target.value})} 
+                  required 
+                />
+              </div>
+              <div className="form-group">
+                <label>Intensifica en</label>
                 <input 
                   className="form-control" 
                   value={newStudent.curso} 
@@ -373,16 +474,14 @@ function App() {
                 />
               </div>
               <div className="form-group">
-                <label>Periodo</label>
-                <select 
+                <label>Mes / Periodo</label>
+                <input 
                   className="form-control" 
-                  value={newStudent.periodoId} 
-                  onChange={e => setNewStudent({...newStudent, periodoId: e.target.value})} 
+                  placeholder="Ej: Julio 2026"
+                  value={newStudent.periodo} 
+                  onChange={e => setNewStudent({...newStudent, periodo: e.target.value})} 
                   required
-                >
-                  <option value="">Seleccionar periodo</option>
-                  {periods.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                </select>
+                />
               </div>
               <div className="form-group">
                 <label>Estado Inicial</label>
