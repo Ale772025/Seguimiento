@@ -28,7 +28,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 // Configuración de Google Sheets (a rellenar por el usuario)
-const GAS_APP_URL = 'https://script.google.com/a/macros/donorionevictoria.com.ar/s/AKfycbw0Znro2greOtHPcnLXDXZ9TJhv3jIh6mt7SQv88gk_QlFpumU0dD04DmpIJqeGYw9n/exec'; 
+const GAS_APP_URL = 'https://script.google.com/macros/s/AKfycbxRyHYGEJJnuTlq56WZNVTpadZ8z4z86dmwo6umk-f1kP-rtuQuu0NDeGt0v0CrcFZF/exec'; 
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
