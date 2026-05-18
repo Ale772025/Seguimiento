@@ -70,7 +70,19 @@ function App() {
       try {
         const response = await fetch(GAS_APP_URL);
         const data = await response.json();
-        setStudents(data.estudiantes || []);
+        
+        // Normalizamos los datos por si los encabezados en la planilla tienen distintos nombres o mayúsculas
+        const mappedStudents = (data.estudiantes || []).map(s => ({
+          id: s.ID !== undefined ? s.ID.toString() : (s.id ? s.id.toString() : Date.now().toString()),
+          nombre: s.nombre || '',
+          cursoOrigen: s.Cursoorigen || s.cursoOrigen || '',
+          materia: s.materia || '',
+          curso: s.curso || '',
+          periodo: s.periodoId || s.periodo || '',
+          estado: s.estado || 'Pendiente'
+        }));
+        
+        setStudents(mappedStudents);
       } catch (error) {
         console.error("Error cargando datos:", error);
         setStudents([]);
