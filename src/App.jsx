@@ -367,16 +367,46 @@ function App() {
                       </span>
                     </td>
                     <td>
-                      <button 
-                        className="btn btn-outline" 
-                        style={{ padding: '4px 8px' }}
-                        onClick={() => {
-                          setSelectedStudent(s);
-                          setIsViewModalOpen(true);
-                        }}
-                      >
-                        Ver
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <button 
+                          className="btn btn-outline" 
+                          style={{ padding: '4px 8px' }}
+                          title="Ver historial"
+                          onClick={() => {
+                            setSelectedStudent(s);
+                            setIsViewModalOpen(true);
+                          }}
+                        >
+                          Ver
+                        </button>
+                        <button 
+                          className="btn btn-outline"
+                          title="Editar"
+                          style={{ padding: '4px' }}
+                          onClick={() => {
+                            setNewStudent({
+                              nombre: s.nombre,
+                              cursoOrigen: s.cursoOrigen,
+                              materia: s.materia,
+                              curso: s.curso,
+                              periodo: s.periodo,
+                              estado: s.estado
+                            });
+                            setEditingStudentId(s.id);
+                            setIsModalOpen(true);
+                          }}
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button 
+                          className="btn btn-outline"
+                          title="Borrar"
+                          style={{ padding: '4px', borderColor: '#ef4444', color: '#ef4444' }}
+                          onClick={() => handleDeleteStudent(s.id)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
