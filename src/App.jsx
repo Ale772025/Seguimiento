@@ -30,7 +30,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 // Configuración de Google Sheets (a rellenar por el usuario)
-const GAS_APP_URL = 'https://script.google.com/macros/s/AKfycbyt4_384EiGDdCMWutDz0ZmVtu4ncYPqNoSN5JYSc36jS8vKa98evBbdZMyoTD_dluc/exec'; 
+const GAS_APP_URL = 'https://script.google.com/macros/s/AKfycbz2u12xwvMbfkvShUlrvf536JSNw43AUcJbvWdqlOVT42tAgLAHI-vX7u63u-EM9uRW/exec'; 
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
