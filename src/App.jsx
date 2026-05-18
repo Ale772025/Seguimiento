@@ -12,7 +12,9 @@ import {
   Clock,
   Filter,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -28,15 +30,19 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 // Configuración de Google Sheets (a rellenar por el usuario)
-const GAS_APP_URL = 'https://script.google.com/macros/s/AKfycbwdY5v4YVvFq4s_gu2EVk0_4mnQcGeF_RTIHNPlb5j4dPc5QlpcScSeGwou0NUIq2kt/exec'; 
+const GAS_APP_URL = 'https://script.google.com/macros/s/AKfycbyt4_384EiGDdCMWutDz0ZmVtu4ncYPqNoSN5JYSc36jS8vKa98evBbdZMyoTD_dluc/exec'; 
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  
+  // Agregamos estado para saber si estamos editando
+  const [editingStudentId, setEditingStudentId] = useState(null);
   const [newStudent, setNewStudent] = useState({
     nombre: '',
     cursoOrigen: '',
@@ -49,8 +55,7 @@ function App() {
   // Cargar datos desde Google Sheets
   useEffect(() => {
     const fetchData = async () => {
-      if (!GAS_APP_URL) {
-        // Cargar datos de ejemplo si no hay URL configurada
+      if (!GAS_APP_URL || GAS_APP_URL === 'TU_URL_AQUI') {
         setStudents([
           { id: '1', nombre: 'Juan Pérez', cursoOrigen: '3ro A', materia: 'Matemática', curso: '4to A', periodo: 'Febrero 2026', estado: 'Aprobado' },
           { id: '2', nombre: 'Ana García', cursoOrigen: '4to B', materia: 'Física', curso: '5to B', periodo: 'Febrero 2026', estado: 'Pendiente' },
@@ -68,7 +73,6 @@ function App() {
         setStudents(data.estudiantes || []);
       } catch (error) {
         console.error("Error cargando datos:", error);
-        // Si falla la carga, inicializamos con arrays vacíos para evitar errores en el render
         setStudents([]);
       } finally {
         setLoading(false);
@@ -102,30 +106,80 @@ function App() {
     });
   }, [students]);
 
-  const handleAddStudent = async (e) => {
+  const handleSaveStudent = async (e) => {
     e.preventDefault();
-    const student = { ...newStudent, id: Date.now().toString() };
     
-    if (GAS_APP_URL) {
-      try {
-        await fetch(GAS_APP_URL, {
-          method: 'POST',
-          mode: 'no-cors', // GAS requiere no-cors o redirección compleja
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sheet: 'Estudiantes',
-            action: 'add',
-            row: [student.id, student.nombre, student.cursoOrigen, student.materia, student.curso, student.periodo, student.estado]
-          })
-        });
-      } catch (error) {
-        console.error("Error guardando:", error);
+    if (editingStudentId) {
+      // Actualizar estudiante existente
+      const updatedStudent = { ...newStudent, id: editingStudentId };
+      
+      if (GAS_APP_URL && GAS_APP_URL !== 'TU_URL_AQUI') {
+        try {
+          await fetch(GAS_APP_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sheet: 'Estudiantes',
+              action: 'update',
+              id: editingStudentId,
+              row: [updatedStudent.id, updatedStudent.nombre, updatedStudent.cursoOrigen, updatedStudent.materia, updatedStudent.curso, updatedStudent.periodo, updatedStudent.estado]
+            })
+          });
+        } catch (error) { console.error("Error actualizando:", error); }
       }
+      setStudents(students.map(s => s.id === editingStudentId ? updatedStudent : s));
+    } else {
+      // Agregar nuevo estudiante
+      const student = { ...newStudent, id: Date.now().toString() };
+      
+      if (GAS_APP_URL && GAS_APP_URL !== 'TU_URL_AQUI') {
+        try {
+          await fetch(GAS_APP_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sheet: 'Estudiantes',
+              action: 'add',
+              row: [student.id, student.nombre, student.cursoOrigen, student.materia, student.curso, student.periodo, student.estado]
+            })
+          });
+        } catch (error) { console.error("Error guardando:", error); }
+      }
+      setStudents([...students, student]);
     }
 
-    setStudents([...students, student]);
     setIsModalOpen(false);
+    setEditingStudentId(null);
     setNewStudent({ nombre: '', cursoOrigen: '', materia: '', curso: '', periodo: '', estado: 'Pendiente' });
+  };
+
+  const handleDeleteStudent = async (id) => {
+    if(window.confirm('¿Estás seguro de que deseas eliminar este registro?')) {
+      if (GAS_APP_URL && GAS_APP_URL !== 'TU_URL_AQUI') {
+        try {
+          await fetch(GAS_APP_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sheet: 'Estudiantes',
+              action: 'delete',
+              id: id
+            })
+          });
+        } catch (error) { console.error("Error eliminando:", error); }
+      }
+      
+      setStudents(students.filter(s => s.id !== id));
+      
+      // Si el modal está abierto, lo cerramos si no quedan más registros de esa persona/materia
+      const remaining = students.filter(s => s.id !== id && s.nombre === selectedStudent?.nombre && s.materia === selectedStudent?.materia);
+      if (remaining.length === 0) {
+        setIsViewModalOpen(false);
+      }
+    }
   };
 
   const handleUpdateStatus = async (id, newStatus) => {
@@ -134,7 +188,7 @@ function App() {
 
     const updatedStudent = { ...studentToUpdate, estado: newStatus };
     
-    if (GAS_APP_URL) {
+    if (GAS_APP_URL && GAS_APP_URL !== 'TU_URL_AQUI') {
       try {
         await fetch(GAS_APP_URL, {
           method: 'POST',
@@ -148,7 +202,7 @@ function App() {
           })
         });
       } catch (error) {
-        console.error("Error actualizando:", error);
+        console.error("Error actualizando estado:", error);
       }
     }
 
@@ -209,11 +263,6 @@ function App() {
             <FileText size={20} /> Informes
           </a>
         </nav>
-        <div style={{ marginTop: 'auto' }}>
-          <a className="nav-item">
-            <LogOut size={20} /> Cerrar Sesión
-          </a>
-        </div>
       </aside>
 
       {/* Main Content */}
@@ -224,7 +273,11 @@ function App() {
             <p style={{ color: 'var(--text-muted)' }}>Seguimiento de periodos de intensificación educativa</p>
           </div>
           {activeTab === 'students' && (
-            <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+            <button className="btn btn-primary" onClick={() => {
+              setEditingStudentId(null);
+              setNewStudent({ nombre: '', cursoOrigen: '', materia: '', curso: '', periodo: '', estado: 'Pendiente' });
+              setIsModalOpen(true);
+            }}>
               <Plus size={20} /> Agregar Alumno
             </button>
           ) || activeTab === 'dashboard' && (
@@ -339,7 +392,7 @@ function App() {
               <p>Historial completo de materias intensificadas por estudiante.</p>
               <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
                 <select className="form-control" id="studentSelect">
-                  {students.map(s => <option key={s.id} value={s.nombre}>{s.nombre}</option>)}
+                  {[...new Set(students.map(s => s.nombre))].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
                 <button className="btn btn-primary" onClick={() => generatePDF('alumno', document.getElementById('studentSelect').value)}>
                   Exportar
@@ -353,7 +406,7 @@ function App() {
       {/* Modal Ver/Editar Alumno */}
       {isViewModalOpen && selectedStudent && (
         <div className="modal-overlay">
-          <div className="modal-content">
+          <div className="modal-content" style={{ maxWidth: '700px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h2>Detalles de Intensificación</h2>
               <button className="btn btn-outline" style={{ padding: '4px' }} onClick={() => setIsViewModalOpen(false)}>
@@ -377,7 +430,7 @@ function App() {
                   <tr>
                     <th>Periodo</th>
                     <th>Estado</th>
-                    <th>Acción</th>
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -385,14 +438,9 @@ function App() {
                     <tr key={s.id}>
                       <td>{s.periodo}</td>
                       <td>
-                        <span className={`status-badge status-${s.estado.toLowerCase()}`}>
-                          {s.estado}
-                        </span>
-                      </td>
-                      <td>
                         <select 
                           className="form-control"
-                          style={{ padding: '4px', fontSize: '0.875rem' }}
+                          style={{ padding: '4px', fontSize: '0.875rem', border: 'none', backgroundColor: 'transparent' }}
                           value={s.estado}
                           onChange={(e) => handleUpdateStatus(s.id, e.target.value)}
                         >
@@ -400,6 +448,38 @@ function App() {
                           <option value="Aprobado">Aprobado</option>
                           <option value="Desaprobado">Desaprobado</option>
                         </select>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button 
+                            className="btn btn-outline"
+                            title="Editar"
+                            style={{ padding: '4px' }}
+                            onClick={() => {
+                              setNewStudent({
+                                nombre: s.nombre,
+                                cursoOrigen: s.cursoOrigen,
+                                materia: s.materia,
+                                curso: s.curso,
+                                periodo: s.periodo,
+                                estado: s.estado
+                              });
+                              setEditingStudentId(s.id);
+                              setIsViewModalOpen(false);
+                              setIsModalOpen(true);
+                            }}
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button 
+                            className="btn btn-outline"
+                            title="Borrar"
+                            style={{ padding: '4px', borderColor: '#ef4444', color: '#ef4444' }}
+                            onClick={() => handleDeleteStudent(s.id)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -412,6 +492,7 @@ function App() {
                 className="btn btn-primary" 
                 style={{ width: '100%' }}
                 onClick={() => {
+                  setEditingStudentId(null);
                   setNewStudent({
                     nombre: selectedStudent.nombre,
                     cursoOrigen: selectedStudent.cursoOrigen,
@@ -431,12 +512,12 @@ function App() {
         </div>
       )}
 
-      {/* Modal Agregar Alumno */}
+      {/* Modal Agregar/Editar Alumno */}
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h2>Cargar Estudiante</h2>
-            <form onSubmit={handleAddStudent} style={{ marginTop: '1.5rem' }}>
+            <h2>{editingStudentId ? 'Editar Estudiante' : 'Cargar Estudiante'}</h2>
+            <form onSubmit={handleSaveStudent} style={{ marginTop: '1.5rem' }}>
               <div className="form-group">
                 <label>Nombre Completo</label>
                 <input 
@@ -484,7 +565,7 @@ function App() {
                 />
               </div>
               <div className="form-group">
-                <label>Estado Inicial</label>
+                <label>Estado</label>
                 <select 
                   className="form-control" 
                   value={newStudent.estado} 
@@ -500,7 +581,7 @@ function App() {
                   Cancelar
                 </button>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                  Guardar
+                  {editingStudentId ? 'Actualizar' : 'Guardar'}
                 </button>
               </div>
             </form>

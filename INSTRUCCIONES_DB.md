@@ -28,6 +28,11 @@ function doPost(e) {
   const data = JSON.parse(e.postData.contents);
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(data.sheet);
   
+  if (!sheet) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Sheet not found" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
   if (data.action === "add") {
     sheet.appendRow(data.row);
   } else if (data.action === "update") {
@@ -35,6 +40,14 @@ function doPost(e) {
     for (let i = 1; i < rows.length; i++) {
       if (rows[i][0].toString() === data.id.toString()) {
         sheet.getRange(i + 1, 1, 1, data.row.length).setValues([data.row]);
+        break;
+      }
+    }
+  } else if (data.action === "delete") {
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0].toString() === data.id.toString()) {
+        sheet.deleteRow(i + 1);
         break;
       }
     }
@@ -60,7 +73,7 @@ function getRows(sheet) {
 1. Haz clic en **Implementar > Nueva implementación**.
 2. Selecciona Tipo: **Aplicación web**.
 3. Configuración:
-   - Descripción: `API Intensificación`
+   - Descripción: `API Intensificación v2`
    - Ejecutar como: **Yo** (tu cuenta).
    - Quién tiene acceso: **Cualquier persona**.
 4. Haz clic en **Implementar** y autoriza los permisos.
@@ -68,5 +81,5 @@ function getRows(sheet) {
 
 ### 4. Conectar con el Software
 1. Abre el archivo `App.jsx` en este proyecto.
-2. Busca la línea `const GAS_APP_URL = '';`
+2. Busca la línea `const GAS_APP_URL = 'TU_URL_AQUI';` (o si dejaste la que tenías, mantenla).
 3. Pega tu URL entre las comillas.
